@@ -1,32 +1,32 @@
-from homeassistant import config_entries
-from homeassistant.core import callback
-from homeassistant.const import UnitOfTime
-from homeassistant.helpers import selector
-from homeassistant.data_entry_flow import FlowResult
+"""Config flow for the RBFA integration."""
 
-from .const import DOMAIN
+from __future__ import annotations
 
-import logging
-import voluptuous as vol
 from typing import Any
 
-_LOGGER = logging.getLogger(__name__)
+import voluptuous as vol
+from homeassistant import config_entries
+from homeassistant.const import UnitOfTime
+from homeassistant.core import callback
+from homeassistant.helpers import selector
+
+from .const import DOMAIN
+from .helpers import entry_option
+
 
 class RbfaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Example config flow."""
+    """Config flow for RBFA."""
+
     # The schema version of the entries that it creates
     # Home Assistant will call your migrate method if the version changes
     VERSION = 1
     MINOR_VERSION = 1
 
-
-    async def async_step_user(self, user_input):
-
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
-            team = user_input.get('team')
-            duration = user_input.get('duration')
-            show_ranking = user_input.get('show_ranking')
-
+            team = user_input["team"]
             await self.async_set_unique_id(f"{team}")
             self._abort_if_unique_id_configured()
 
@@ -34,10 +34,9 @@ class RbfaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                vol.Required('team'): str,
-                vol.Optional('alt_name'): str,
-                vol.Required('duration', default=105
-                ): selector.NumberSelector(
+                vol.Required("team"): str,
+                vol.Optional("alt_name"): str,
+                vol.Required("duration", default=105): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=5,
                         max=120,
@@ -46,11 +45,10 @@ class RbfaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         unit_of_measurement=UnitOfTime.MINUTES,
                     ),
                 ),
-                vol.Required('show_ranking', default=True): bool,
-                vol.Required('show_referee', default=True): bool,
+                vol.Required("show_ranking", default=True): bool,
+                vol.Required("show_referee", default=True): bool,
             }
         )
-
 
         return self.async_show_form(
             step_id="user",
@@ -64,55 +62,33 @@ class RbfaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
-        return OptionsFlowHandler(config_entry)
+        return OptionsFlowHandler()
 
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-        _LOGGER.debug('data? %r', config_entry.data['duration'])
+
+class OptionsFlowHandler(config_entries.OptionsFlowWithReload):
+    """Handle RBFA options; the entry reloads automatically on save."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="test", data=user_input)
+            return self.async_create_entry(data=user_input)
 
-        if 'alt_name' in self.config_entry.options:
-            alt_name = self.config_entry.options['alt_name']
-        elif 'alt_name' in self.config_entry.data:
-            alt_name = self.config_entry.data['alt_name']
-        else:
-            alt_name = ''
+        alt_name = entry_option(self.config_entry, "alt_name", "")
+        duration = entry_option(self.config_entry, "duration")
+        show_ranking = entry_option(self.config_entry, "show_ranking", True)
+        show_referee = entry_option(self.config_entry, "show_referee", True)
 
-        if 'duration' in self.config_entry.options:
-            duration = self.config_entry.options['duration']
-        else:
-            duration = self.config_entry.data['duration']
-
-        if 'show_ranking' in self.config_entry.options:
-            show_ranking = self.config_entry.options['show_ranking']
-        elif 'show_ranking' in self.config_entry.data:
-            show_ranking = self.config_entry.data['show_ranking']
-        else:
-            show_ranking = True
-
-        if 'show_referee' in self.config_entry.options:
-            show_referee = self.config_entry.options['show_referee']
-        elif 'show_referee' in self.config_entry.data:
-            show_referee = self.config_entry.data['show_referee']
-        else:
-            show_referee = True
-
-# https://community.home-assistant.io/t/voluptuous-options-flow-validation-for-an-optional-string-how/305538/3
+        # https://community.home-assistant.io/t/voluptuous-options-flow-validation-for-an-optional-string-how/305538/3
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Optional('alt_name', description={"suggested_value": alt_name}): str,
-                    vol.Required('duration', default=duration
-                    ): selector.NumberSelector(
+                    vol.Optional(
+                        "alt_name", description={"suggested_value": alt_name}
+                    ): str,
+                    vol.Required("duration", default=duration): selector.NumberSelector(
                         selector.NumberSelectorConfig(
                             min=5,
                             max=120,
@@ -121,8 +97,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                             unit_of_measurement=UnitOfTime.MINUTES,
                         ),
                     ),
-                    vol.Required('show_ranking', default=show_ranking): bool,
-                    vol.Required('show_referee', default=show_referee): bool,
+                    vol.Required("show_ranking", default=show_ranking): bool,
+                    vol.Required("show_referee", default=show_referee): bool,
                 }
             ),
         )

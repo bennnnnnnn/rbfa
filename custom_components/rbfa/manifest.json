@@ -1,12 +1,17 @@
 {
   "domain": "rbfa",
   "name": "RBFA",
-  "codeowners": ["@rgerbranda"],
+  "codeowners": [
+    "@rgerbranda"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/rgerbranda/rbfa",
+  "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/rgerbranda/rbfa/issues",
-  "requirements": [],
-  "version": "v0.3.0"
+  "requirements": [
+    "mashumaro>=3.17"
+  ],
+  "version": "0.3.0"
 }

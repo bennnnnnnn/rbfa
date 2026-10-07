@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+      - name: Set manifest version from tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          jq --arg v "$version" '.version = $v' custom_components/rbfa/manifest.json > manifest.tmp
+          mv manifest.tmp custom_components/rbfa/manifest.json
+      - name: Zip integration
+        working-directory: custom_components/rbfa
+        run: zip -r "$GITHUB_WORKSPACE/rbfa.zip" . -x "__pycache__/*"
+      - name: Upload zip to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" rbfa.zip --clobber

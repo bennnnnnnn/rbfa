@@ -1,34 +1,39 @@
+"""Platform for calendar integration."""
+
+from __future__ import annotations
+
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, List
+from datetime import datetime
 
-from homeassistant.core import HomeAssistant
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const       import DOMAIN
-from .coordinator import MyCoordinator
-from .entity      import RbfaEntity
-
+from .const import DOMAIN
+from .coordinator import RbfaConfigEntry, RbfaCoordinator
+from .entity import RbfaEntity
+from .helpers import entry_option
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: RbfaConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up RBFA sensor based on a config entry."""
-    coordinator: MyCoordinator = hass.data[DOMAIN][entry.entry_id]
+    """Set up RBFA calendar based on a config entry."""
+    coordinator = entry.runtime_data
 
     async_add_entities(
-        [TeamCalendar(
-            coordinator,
-            entry,
-        )]
+        [
+            TeamCalendar(
+                coordinator,
+                entry,
+            )
+        ]
     )
+
 
 class TeamCalendar(RbfaEntity, CalendarEntity):
     """Defines a RBFA Team Calendar."""
@@ -37,69 +42,54 @@ class TeamCalendar(RbfaEntity, CalendarEntity):
 
     def __init__(
         self,
-        coordinator,
-        config,
+        coordinator: RbfaCoordinator,
+        config: RbfaConfigEntry,
     ) -> None:
-        super().__init__(coordinator)
         """Initialize the RBFA Team entity."""
-        self.TeamData = coordinator
+        super().__init__(coordinator)
         self.config = config
-        team = config.data['team']
-        _LOGGER.debug('team: %r', team)
-        self._attr_name      = f"{DOMAIN} {team}"
+        team = config.data["team"]
+        _LOGGER.debug("team: %r", team)
+        self._attr_name = f"{DOMAIN} {team}"
         self._attr_unique_id = f"{DOMAIN}_calendar_{team}"
 
-        self._event = None
-
     @property
-    def event(self) -> Optional[CalendarEvent]:
+    def event(self) -> CalendarEvent | None:
         """Return the next upcoming event."""
 
-        if 'alt_name' in self.config.options:
-            self._attr_name = self.config.options['alt_name']
-        elif 'alt_name' in self.config.data:
-            self._attr_name = self.config.data['alt_name']
-        else:
-            self._attr_name = f"{self.TeamData.teamdata['clubName']} | {self.TeamData.teamdata['name']}"
+        alt_name = entry_option(self.config, "alt_name")
+        team = self.coordinator.data.team
+        if alt_name:
+            self._attr_name = alt_name
+        elif team is not None:
+            self._attr_name = f"{team.club_name} | {team.name}"
 
-        upcoming = self.TeamData.data['upcoming']
-        lastmatch = self.TeamData.data['lastmatch']
-
-        if upcoming != None:
-#             _LOGGER.debug('upcoming teamname: %r', upcoming['teamname'])
-            return CalendarEvent(
-                uid         = upcoming['matchid'],
-                summary     = upcoming['hometeam'] + ' - ' + upcoming['awayteam'],
-                start       = upcoming['starttime'],
-                end         = upcoming['endtime'],
-                location    = upcoming['location'],
-                description = upcoming['series'],
-            )
+        upcoming = self.coordinator.data.upcoming
+        if upcoming is None:
+            return None
+        return CalendarEvent(
+            uid=upcoming.id,
+            summary=upcoming.summary,
+            start=upcoming.starttime,
+            end=upcoming.endtime,
+            location=upcoming.location,
+            description=upcoming.series,
+        )
 
     async def async_get_events(
-        self,
-        hass: HomeAssistant,
-        start_date: datetime,
-        end_date: datetime
-    ) -> List[CalendarEvent]:
+        self, hass: HomeAssistant, start_date: datetime, end_date: datetime
+    ) -> list[CalendarEvent]:
         """Return calendar events"""
-        events: List[CalendarEvent] = []
-
-        _LOGGER.debug("count: %r", len(self.TeamData.collections))
-        for team_items in self.TeamData.collections:
-
-            if start_date.date() <= team_items['starttime'].date() <= end_date.date():
-
-                # Summary below will define the name of event in calendar
-                events.append(
-                    CalendarEvent(
-                        uid         = team_items['uid'],
-                        summary     = team_items['summary'],
-                        start       = team_items['starttime'],
-                        end         = team_items['endtime'],
-                        location    = team_items['location'],
-                        description = team_items['description'],
-                    )
-                )
-
-        return events
+        include_score = entry_option(self.config, "show_ranking", True)
+        return [
+            CalendarEvent(
+                uid=match.id,
+                summary=match.summary,
+                start=match.starttime,
+                end=match.endtime,
+                location=match.location,
+                description=match.description(include_score),
+            )
+            for match in self.coordinator.data.matches
+            if start_date.date() <= match.starttime.date() <= end_date.date()
+        ]

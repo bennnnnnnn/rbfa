@@ -1,0 +1,7 @@
+# Minimal Home Assistant config for local development (see scripts/develop).
+default_config:
+
+logger:
+  default: info
+  logs:
+    custom_components.rbfa: debug
